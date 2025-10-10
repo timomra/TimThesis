@@ -1,0 +1,238 @@
+---
+title: "Histone_analysis"
+author: "Tim O'Meara"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+
+#### Library import
+
+```{r, message=FALSE, warning=FALSE, echo=TRUE, results='hide'}
+library(tidyverse)
+library(stringr)
+library(ggfortify)
+library(cluster)
+library(factoextra)
+library(magrittr)
+library(tibble)
+library(NbClust)
+library(viridis)
+library(dendextend)
+library(heatmaply)
+library(superheat)
+
+# to make things look nice :)
+library(knitr)
+```
+
+
+
+# Dataset import
+.Raw files were processed using EpiProfile 2.0 (acD3_pic). https://github.com/zfyuan/EpiProfile2.0_Family/tree/master
+
+```{r, message=FALSE, warning=FALSE, echo=TRUE, results='hide'}
+# filepath <- "C:\\Users\\Tim\\OneDrive\\__ThesisProject\\_DryLab\\Code\\Thomas_etal(histone-MS)\\histone_ratios_cell_line_basic.csv"
+filepath <- "C:\\Users\\Tim\\OneDrive\\__ThesisProject\\_DryLab\\Code\\Thomas_etal(histone-MS)\\myhistone_ratios.csv"
+# filepath <- "C:\\Users\\Tim\\OneDrive\\__ThesisProject\\_DryLab\\Results\\Thomas_etal_firstrun\\histone_ratios.csv"
+
+# my_data
+# filepath <- "C:\\Users\\Tim\\OneDrive\\__ThesisProject\\_DryLab\\Datasets\\Be2Histones\\histone_ratios.csv"
+# filepath <- "C:\\Users\\Tim\\OneDrive\\__BHLS\\EpiPro_PrPic.csv"
+
+
+
+histone_data <- read.csv(filepath, skip=1)
+```
+
+# Data formatting.
+EpiProfile outputs an excel spreadsheet which is not easy to parse. so a couple of formatting steps are needed.
+
+Since we are only really interested in the `Area` columns, we filter the rest out. 
+
+```{r, message=FALSE, warning=FALSE, echo=TRUE, results='hide'}
+histone_data <- histone_data %>% 
+  select(1, contains("Area")) %>% 
+  filter(!is.na(Area))
+
+
+```
+
+We also create appropriate names for our samples and our peptide names readable. 
+```{r, message=FALSE, warning=FALSE, echo=TRUE, results='hide'}
+# Cleaning Sample Names
+labels <- read.csv(filepath, header = FALSE)
+labels <- labels[1,2:ncol(histone_data)]
+colnames(histone_data)[-1] <- labels
+colnames(histone_data) <- sub('[.]', '_', make.names(colnames(histone_data), unique = TRUE))
+rm(labels)
+
+# Cleaning Peptide Names 
+histone_data$Peptide <- unlist(lapply(histone_data$Peptide, function(x){unlist(str_replace_all(x, "[ :().]", "_"))}))
+
+# Finally reformat as tibble to make it easier to work with
+histone_data <- as_tibble(histone_data)
+```
+
+**After Reformatting, our table looks like this:**
+
+```{r preview_data, echo=TRUE}
+kable(head(histone_data, 3))
+```
+
+
+
+
+# Data Check. 
+
+To ensure the quality of our data, we expect to find some common marks/features.
+If they are not there, we might question that sample....
+
+- H3 K18/23ac 
+- H3 K27 Methylation (all 3 kinds) 
+- H3.3 K27 methylation (all 3 kinds ) 
+- H3 K9/14ac 
+- H3 K79me1
+- H4 unmodified (between 4-17)
+- H3 unmodified (between 3-8)
+
+
+```{r, message=FALSE, warning=FALSE, echo=TRUE, results='hide'}
+# filter for the rows that contain these common mods... 
+pattern <- "H3_18_26_K(18|23)ac|H3_27_40_K27me|H33_27_40_K27me|H3_9_17_K(9|14)ac|H4_4_17_unmod|H3_3_8_unmod|H3_73_83_K79me1"
+data_check <- filter(histone_data,str_detect(histone_data$Peptide,pattern))
+
+# Transpose
+data_check_t <- data_check %>% 
+  gather(Sample, value, 2:ncol(data_check)) %>% 
+  spread(Peptide, value)
+
+
+# Check how many of these were identified in each sample
+data_check_report <- data_check_t %>%
+  mutate(zeroes = rowSums(data_check_t==0))  
+
+# I next want to find how many zeroes are in each sample to identify possible bad samples... 
+
+zero_counts <- data_check[,2:ncol(data_check)] %>%
+  summarise(across(everything(), ~ sum(. == 0))/32) %>%
+  pivot_longer(everything(), names_to = "column", values_to = "Proportion of common PTMs missing")
+```
+
+Number of times these modifications were NOT found at all in each sample...
+
+```{r}
+kable(zero_counts)
+```
+
+These are the samples that are removed, as they have more than 2 missing values for these very common marks. 
+
+```{r}
+bad_samples <- data_check_report %>% 
+  filter(zeroes > 2) %>% 
+  select(Sample, zeroes)
+
+histone_data <- histone_data %>% 
+  gather(Sample, value, 2:ncol(histone_data)) %>% 
+  spread(Peptide, value)
+
+histone_data <- histone_data %>% 
+  filter(!histone_data$Sample %in% bad_samples$Sample)
+
+kable(bad_samples)
+rm(bad_samples)
+rm(data_check)
+```
+
+# Data Pre-processing
+
+The authors also suggest that you combine modifications that can be difficult to differentiate. 
+- in the case of propionic anhydride deriv, they have a unique list
+- for AcD3 they use a specific list of peptides....
+
+`histone_data <- histone_data %>% 
+  mutate(
+          H3_9_17_K9K14ma = apply(data[c("H3_9_17_K9ma", "H3_9_17_K14ma")], 1, sum, na.rm = TRUE),
+          H3_9_17_K9K14ac = apply(data[c("H3_9_17_K9ac", "H3_9_17_K14ac")], 1, sum, na.rm = TRUE),
+          H3_9_17_K9K14pr = apply(data[c("H3_9_17_K9pr", "H3_9_17_K14pr")], 1, sum, na.rm = TRUE),
+          H3_9_17_K9K14gl = apply(data[c("H3_9_17_K9gl", "H3_9_17_K14gl")], 1, sum, na.rm = TRUE),
+          H3_9_17_K9K14cr = apply(data[c("H3_9_17_K9cr", "H3_9_17_K14cr")], 1, sum, na.rm = TRUE),
+          H3_9_17_K9K14su = apply(data[c("H3_9_17_K9su", "H3_9_17_K14su")], 1, sum, na.rm = TRUE),
+          H3_9_17_K9K14bu = apply(data[c("H3_9_17_K9bu", "H3_9_17_K14bu")], 1, sum, na.rm = TRUE),
+          H3_18_26_K18K23ac = apply(data[c("H3_18_26_K18ac", "H3_18_26_K23ac")], 1, sum, na.rm = TRUE),
+          H3_18_26_K18K23pr = apply(data[c("H3_18_26_K18pr", "H3_18_26_K23pr")], 1, sum, na.rm = TRUE),
+          H3_18_26_K18K23cr = apply(data[c("H3_18_26_K18cr", "H3_18_26_K23cr")], 1, sum, na.rm = TRUE),
+          H3_18_26_K18K23gl = apply(data[c("H3_18_26_K18gl", "H3_18_26_K23gl")], 1, sum, na.rm = TRUE),
+          H3_18_26_K18K23hi = apply(data[c("H3_18_26_K18hi", "H3_18_26_K23hi")], 1, sum, na.rm = TRUE),
+          H3_18_26_K18K23ma = apply(data[c("H3_18_26_K18ma", "H3_18_26_K23ma")], 1, sum, na.rm = TRUE),
+          H3_18_26_K18K23su = apply(data[c("H3_18_26_K18su", "H3_18_26_K23su")], 1, sum, na.rm = TRUE),
+          H3_18_26_K18K23bu = apply(data[c("H3_18_26_K18bu", "H3_18_26_K23bu")], 1, sum, na.rm = TRUE),
+          H3_27_40_K27K36hi = apply(data[c("H3_27_40_K27hi", "H3_27_40_K36hi")], 1, sum, na.rm = TRUE),
+          H3_27_40_K27K36ma = apply(data[c("H3_27_40_K27ma", "H3_27_40_K36ma")], 1, sum, na.rm = TRUE),
+         H3_27_40_K27K36cr = apply(data[c("H3_27_40_K27cr", "H3_27_40_K36cr")], 1, sum, na.rm = TRUE),
+         H3_27_40_K27K36bu = apply(data[c("H3_27_40_K27bu", "H3_27_40_K36bu")], 1, sum, na.rm = TRUE),
+         H3_27_40_K27K36pr = apply(data[c("H3_27_40_K27pr", "H3_27_40_K36pr")], 1, sum, na.rm = TRUE),
+         H2A1_4_11_K5K9ac = apply(data[c("H2A1_4_11_K5ac", "H2A1_4_11_K9ac")], 1, sum, na.rm = TRUE),
+         H2AX_4_11_K5K9ac = apply(data[c("H2AX_4_11_K5ac", "H2AX_4_11_K9ac")], 1, sum, na.rm = TRUE),
+         H2AJ_4_11_K5K9ac = apply(data[c("H2AJ_4_11_K5ac", "H2AJ_4_11_K9ac")], 1, sum, na.rm = TRUE)) %>% 
+  select(-matches("H3_9_17_K(9|14)(ma|pr|gl|cr|su|bu)")) %>% 
+  select(-matches("H3_18_26_K(18|23)(pr|cr|gl|hi|ma|su|bu)")) %>% 
+  select(-matches("H3_27_40_K(27|36)(ac|hi|ma|cr|bu|pr)")) %>% 
+  select(-matches("H3_18_26_K18ac$")) %>% 
+  select(-matches("H3_18_26_K23ac$")) %>%
+  select(-matches("H3_9_17_K9ac$")) %>%
+  select(-matches("H3_9_17_K14ac$")) %>% 
+  select(-matches("H2A1_4_11_K5ac$")) %>% 
+  select(-matches("H2A1_4_11_K9ac$")) %>% 
+  select(-matches("H2AX_4_11_K5ac$")) %>% 
+  select(-matches("H2AX_4_11_K9ac$")) %>% 
+  select(-matches("H2AJ_4_11_K5ac$")) %>% 
+  select(-matches("H2AJ_4_11_K9ac$"))
+`
+
+#```{r, message=FALSE, warning=FALSE, echo=TRUE, results='hide'}
+# If you just did propionyl labeling, use this command
+data <- histone_data %>% 
+mutate(H3_9_17_K9K14ac = apply(data[c("H3_9_17_K9ac", "H3_9_17_K14ac")], 1, sum, na.rm = TRUE),
+          H3_18_26_K18K23ac = apply(data[c("H3_18_26_K18ac", "H3_18_26_K23ac")], 1, sum, na.rm = TRUE),
+          H2A1_4_11_K5K9ac = apply(data[c("H2A1_4_11_K5ac", "H2A1_4_11_K9ac")], 1, sum, na.rm = TRUE),
+          H2AX_4_11_K5K9ac = apply(data[c("H2AX_4_11_K5ac", "H2AX_4_11_K9ac")], 1, sum, na.rm = TRUE),
+          H2AJ_4_11_K5K9ac = apply(data[c("H2AJ_4_11_K5ac", "H2AJ_4_11_K9ac")], 1, sum, na.rm = TRUE)) %>% 
+   select(-matches("H3_18_26_K18ac$")) %>% 
+   select(-matches("H3_18_26_K23ac$")) %>%
+   select(-matches("H3_9_17_K9ac$")) %>%
+   select(-matches("H3_9_17_K14ac$")) %>% 
+   select(-matches("H2A1_4_11_K5ac$")) %>% 
+   select(-matches("H2A1_4_11_K9ac$")) %>% 
+   select(-matches("H2AX_4_11_K5ac$")) %>% 
+   select(-matches("H2AX_4_11_K9ac$")) %>% 
+   select(-matches("H2AJ_4_11_K5ac$")) %>% 
+   select(-matches("H2AJ_4_11_K9ac$"))
+# ```
+
+
+
+
+```{r}
+
+
+colnames(histone_data)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
