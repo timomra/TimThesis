@@ -14,10 +14,11 @@ This analysis pipeline consisted of pre-processing, post-processing and analysis
 
 
 ### RNA-seq
-- Analysis was performed in python
-- PyDeseq2 was used for differential expression analysis.
+- Analysis was performed in python with PyDeseq2 for differential expression.
 
 ### **References**
 Yuan, Z.F., Sidoli, S., Marchione, D.M., Simithy, J., Janssen, K.A., Szurgot, M.R. and Garcia, B.A., 2018. EpiProfile 2.0: a computational platform for processing epi-proteomics mass spectrometry data. Journal of proteome research, 17(7), pp.2533-2541.
 
 Thomas, S.P., Haws, S.A., Borth, L.E. and Denu, J.M., 2020. A practical guide for analysis of histone post-translational modifications by mass spectrometry: best practices and pitfalls. Methods, 184, pp.53-60.
+
+Muzellec, B., Teleńczuk, M., Cabeli, V. & Andreux, M. 2023. PyDESeq2: a python package for bulk RNA-seq differential expression analysis. Bioinformatics, 39, btad547.
