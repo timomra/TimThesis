@@ -67,6 +67,52 @@ def peptide_namecleaner(peptide_name, pri=False):
 # ==============
 # RNA-seq differential expression analysis
 # ==============
+def counts_tpm(counts_table, ensembl_col="EnsemblGeneID",from_ncbi=True):
+    """
+    Converts a raw counts matrix into a TPM matrix using gene lengths from NCBI
+    Args:
+        - counts_table: A dataframe with row_index=gene_ensembleid and col_index=samples 
+        - ensembl_col: is assumed to be EnsemblGeneID but can be manually changed
+
+    """
+    if len(counts_table) < len(counts_table.columns):
+        print("Warning: please ensure rows=genes and columns=samples")
+
+    
+    ncbi_anot = pd.read_csv("Human.GRCh38.p13.annot.tsv",delimiter="\t").set_index("GeneID")
+    ensemble_to_ncbi = pd.Series(ncbi_anot.index,index=ncbi_anot["EnsemblGeneID"])
+
+
+    if not from_ncbi:
+        # Filter for genes within the NCBI annotations dataset....
+        counts_table=counts_table.join(ensemble_to_ncbi)
+        counts_table=counts_table[counts_table["GeneID"].notna()]
+        counts_table=counts_table.set_index("GeneID")
+
+    
+    def rpk(row):
+        return row/ncbi_anot["Length"].loc[row.name]*1000
+    
+    rpk_raws = counts_table.apply(rpk,axis=1)
+    colsums = rpk_raws.sum(axis=0)
+
+    tpm_table =(rpk_raws/colsums)*1e6
+
+    mapper = id_map(
+    species="human"
+    )
+    mapper.mapper
+
+    ncbi_to_ensembl=dict(pd.Series(ensemble_to_ncbi.index,index=ensemble_to_ncbi))
+    tpm_table["Ensembl"] = tpm_table.index.map(ncbi_to_ensembl)
+    tpm_table.set_index("Ensembl")
+    tpm_table["Symbol"] = tpm_table.Ensembl.map(mapper.mapper)
+    tpm_table.index.name = "NCBI_id"
+
+    return tpm_table
+
+
+
 def diffex_pipeline(counts,metadata,design_contrast,treatment,control, species="human"):
     """ 
     A function which automatically runs Deseq2 for our analysis, making the jupyter notebook cleaner. 
@@ -155,7 +201,7 @@ def asterisk_fcheatmap(pvals,fcs,vmax=2,vmin=-2):
     )
 
 
-def plot_genesets(df,geneset_paths,symbolcol="Symbol",fc_col="log2FoldChange", sigcol="padj", siglevel=0.05):
+def plot_genesets(df,geneset_paths,symbolcol="Symbol",fc_col="log2FoldChange", sigcol="padj", siglevel=0.05,vmax=2,vmin=-2):
     """
     Reads in gene set .tsv files from the GSEA website and plots them for our data
     """
@@ -171,13 +217,55 @@ def plot_genesets(df,geneset_paths,symbolcol="Symbol",fc_col="log2FoldChange", s
 
         asterisk_fcheatmap(
             pvals=data[["padj"]],
-            fcs=data[["log2FoldChange"]]
+            fcs=data[["log2FoldChange"]],
+            
+            vmin=vmin,vmax=vmax
                    )
 
         plt.title(geneset_name)
         plt.show()
     return
 
+# ==============
+# K-means clustering functions
+# ==============
+def kmean_labels(t_data,nclust):
+    """
+    Args
+    a dataframe of the form:
+        - rows = samples as index
+        - columns = features (x, y)
+
+    returns:
+        - A series mapping the points (index) to cluster assignments.  
+    """
+    scaled = pd.DataFrame(preprocessing.scale(t_data))
+    kmeans = KMeans(n_clusters=nclust,random_state=123)
+    kmeans.fit(t_data)
+    return pd.Series(kmeans.labels_,index=t_data.index, name=f"k-means_cluster").astype(str)
+
+
+
+def elbowplot_inert(df_t,kmax):
+    """
+    Inputs: 
+    - dataframe (transposed apppropriately)
+    - maximum value of k to look at. 
+
+    outputs:
+    - list of inertias to then be plotted
+    """
+    scaled = pd.DataFrame(preprocessing.scale(df_t))
+
+    inertias=[]
+    for i in range(2,kmax):
+        kmeans = KMeans(n_clusters=i,random_state=123)
+        kmeans.fit(scaled)
+        inertias.append(kmeans.inertia_)
+
+    inert_df = pd.DataFrame(inertias,list(range(2,kmax))).reset_index()
+    inert_df.columns=["k","inertias"]
+    return inert_df
 
 
 
@@ -193,6 +281,10 @@ def pc_autom(t_dataset, metadata=None,mergetype="left"):
     Can also take a metadata table. 
     The index of this table must match up to the index of the dataset
     """
+    if len(t_dataset) > len(t_dataset.columns):
+        print("Warning: please ensure rows=genes and columns=samples")
+
+
     scaled = preprocessing.scale(t_dataset)
     pca = PCA()
     pca.fit(scaled)
