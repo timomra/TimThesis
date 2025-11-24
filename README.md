@@ -3,7 +3,7 @@ If you are reading this, thank you for visiting my GitHub repo :)
 
 Found here are the scripts I used to analyse data for my thesis.
 
-I analysed histone mass spectrometry, total proteomics and RNA-seq data. 
+I analysed histone mass spectrometry, total proteomics and RNA-seq data. I also queried the ChEMBL database
 
 ### Histone MS
 This analysis pipeline consisted of pre-processing, post-processing and analysis steps. 
