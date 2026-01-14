@@ -1,7 +1,5 @@
-# Effects of Diphenyleneiodonium Chloride on the Metabolic Epigenetic Axis in MYCN-Amplified Neuroblastoma
-If you are reading this, thank you for visiting my GitHub repo :)
-
-Found here are the scripts I used to analyse data for my thesis.
+# Diphenyleneiodonium Induces Global changes to Histone regulation in MYCN-amplified Neuroblastoma
+If you are reading this, thank you for visiting my GitHub repo :). These are the scripts I used to analyse data for my thesis.
 
 I analysed histone mass spectrometry, total proteomics and RNA-seq data. I also queried the ChEMBL database
 
@@ -9,7 +7,7 @@ I analysed histone mass spectrometry, total proteomics and RNA-seq data. I also 
 This analysis pipeline consisted of pre-processing, post-processing and analysis steps. 
 
 - Preprocessing was carried out using Epiprofile 2.2 to convert raw mass spec files to Area (Yuan et al, 2018)
-- Post-processing largely followed the recomendations laid out by Thomas et al. 2020 and was performed in R. 
+- Post-processing largely followed the recomendations laid out by Thomas et al. 2020. 
 - Analysis was performed mostly in Python.
 
 
