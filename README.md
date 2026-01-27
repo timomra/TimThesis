@@ -1,5 +1,7 @@
 # Diphenyleneiodonium Induces Global changes to Histone regulation in MYCN-amplified Neuroblastoma
-If you are reading this, thank you for visiting my GitHub repo :). These are the scripts I used to analyse data for my thesis.
+If you are reading this, thank you for visiting my GitHub repo :). 
+
+These are the scripts I used to analyse data for my undergrad thesis.
 
 I analysed histone mass spectrometry, total proteomics and RNA-seq data. I also queried the ChEMBL database
 
@@ -12,7 +14,15 @@ This analysis pipeline consisted of pre-processing, post-processing and analysis
 
 
 ### RNA-seq
-- Analysis was performed in python with PyDeseq2 for differential expression.
+- Analysis was performed in python with PyDeseq2 for differential expression, the differentially expressed genes were analysed using reactome pathway analysis.
+
+
+
+
+
+
+
+
 
 ### **References**
 Yuan, Z.F., Sidoli, S., Marchione, D.M., Simithy, J., Janssen, K.A., Szurgot, M.R. and Garcia, B.A., 2018. EpiProfile 2.0: a computational platform for processing epi-proteomics mass spectrometry data. Journal of proteome research, 17(7), pp.2533-2541.
