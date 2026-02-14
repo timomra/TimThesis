@@ -5,22 +5,25 @@ These are the scripts I used to analyse data for my undergrad thesis.
 
 I analysed histone mass spectrometry, total proteomics and RNA-seq data. I also queried the ChEMBL database
 
+
 ### Histone MS
 This analysis pipeline consisted of pre-processing, post-processing and analysis steps. 
-
 - Preprocessing was carried out using Epiprofile 2.2 to convert raw mass spec files to Area (Yuan et al, 2018)
 - Post-processing largely followed the recomendations laid out by Thomas et al. 2020. 
 - Analysis was performed mostly in Python.
 
 
-### RNA-seq
+### RNA-seq & Total Proteomics
 - Analysis was performed in python with PyDeseq2 for differential expression, the differentially expressed genes were analysed using reactome pathway analysis.
 
+### ChEMBL analysis 
+- I also queried the ChEMBL database using MySQL to extract a table of pChEMBL values
+- This is included in Appendix 1. 
 
 
 
 
-
+<img width="6000" height="4200" alt="Copy of Thesis_Figure" src="https://github.com/user-attachments/assets/e80106e5-f6c8-466c-b63c-d9e599b3642c" />
 
 
 
