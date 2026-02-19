@@ -1,5 +1,5 @@
 # Diphenyleneiodonium Induces Global changes to Histone regulation in MYCN-amplified Neuroblastoma
-If you are reading this, thank you for visiting my GitHub repo :). 
+If you are reading this, thank you for visiting my GitHub repo :)
 
 These are the scripts I used to analyse data for my undergrad thesis.
 
